@@ -3,17 +3,16 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const router = express.Router();
-
+const UserRepository = require('../repositories/UserRepository');
 // Register
 router.post('/register', async (req, res) => {
-        console.log('Incoming Body:', req.body); // ✅ Debug line
 
     const { username, email, password } = req.body;
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
     try {
-        const user = await User.create({
+         const user = await UserRepository.create({
             username,
             email,
             password: hashedPassword
@@ -26,16 +25,21 @@ router.post('/register', async (req, res) => {
 
 // Login
 router.post('/login', async (req, res) => {
-    const { email, password } = req.body;
-    const user = await User.findOne({ email });
+    try {
+        const { email, password } = req.body;
+        const user = await UserRepository.findByEmail({ email });
 
-    if (!user || !(await bcrypt.compare(password, user.password))) {
-        return res.status(401).json({ error: 'Invalid credentials' });
+        if (!user || !(await bcrypt.compare(password, user.password))) {
+            return res.status(401).json({ error: 'Invalid credentials' });
+        }
+
+        const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: '1h' });
+        res.json({ token });
+    } catch (err) {
+        res.status(500).json({ error: 'Something went wrong during login' });
     }
-
-    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: '1h' });
-    res.json({ token });
 });
+
 
 // Middleware to protect routes
 function authMiddleware(req, res, next) {
@@ -53,7 +57,7 @@ function authMiddleware(req, res, next) {
 
 // Protected dashboard
 router.get('/dashboard', authMiddleware, (req, res) => {
-    res.json({ message: 'Welcome to the dashboard!', userId: req.user.id });
+    res.json({ message: 'Welcome to the dashboard!', user   Id: req.user.id });
 });
 
 // Logout (optional for JWT)
